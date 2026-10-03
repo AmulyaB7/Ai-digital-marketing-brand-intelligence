@@ -1,19 +1,19 @@
-"use client";
+import { ChartAreaInteractive } from "@/components/chart-area-interactive"
+import { DataTable } from "@/components/data-table"
+import { SectionCards } from "@/components/section-cards"
 
-import { useState } from "react";
+import data from "./data.json"
 
-export default function Dashboard() {
-  const [response, setResponse] = useState(null);
-
+export default function Page() {
   return (
-    <main className="min-h-screen p-10">
-      <h1 className="text-3xl font-bold">
-        AI Digital Marketing SaaS
-      </h1>
+    <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+      <SectionCards />
 
-      <p className="mt-4">
-        Dashboard
-      </p>
-    </main>
-  );
+      <div className="px-4 lg:px-6">
+        <ChartAreaInteractive />
+      </div>
+
+      <DataTable data={data} />
+    </div>
+  )
 }
