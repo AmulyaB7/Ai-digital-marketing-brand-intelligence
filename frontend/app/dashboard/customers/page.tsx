@@ -1,76 +1,88 @@
 "use client"
 
+import { useEffect, useState } from "react"
+import { useOrganization } from "@clerk/nextjs"
 import { DataTable } from "@/components/data-table"
 
 type Customer = {
   id: number
-  name: string
-  email: string
-  status: string
-  createdAt: string
+  customer_id: string
+  customer_name: string
+  segment: string | null
+  country: string | null
+  city: string | null
+  state: string | null
+  postal_code: string | null
+  region: string | null
+  created_at: string
 }
-
-const customers: Customer[] = [
-  {
-    id: 1,
-    name: "Acme Corporation",
-    email: "contact@acme.com",
-    status: "Active",
-    createdAt: "Sep 20, 2026",
-  },
-  {
-    id: 2,
-    name: "Nova Media",
-    email: "hello@novamedia.com",
-    status: "Active",
-    createdAt: "Sep 22, 2026",
-  },
-  {
-    id: 3,
-    name: "Bright Labs",
-    email: "team@brightlabs.com",
-    status: "Inactive",
-    createdAt: "Sep 24, 2026",
-  },
-  {
-    id: 4,
-    name: "Pixel Works",
-    email: "hello@pixelworks.com",
-    status: "Active",
-    createdAt: "Sep 26, 2026",
-  },
-  {
-    id: 5,
-    name: "Growth Hub",
-    email: "contact@growthhub.com",
-    status: "Active",
-    createdAt: "Sep 28, 2026",
-  },
-]
 
 const customerColumns = [
   {
-    accessorKey: "name",
+    accessorKey: "customer_name",
     header: "Customer",
   },
   {
-    accessorKey: "email",
-    header: "Email",
+    accessorKey: "customer_id",
+    header: "Customer ID",
   },
   {
-    accessorKey: "status",
-    header: "Status",
+    accessorKey: "segment",
+    header: "Segment",
   },
   {
-    accessorKey: "createdAt",
-    header: "Created At",
+    accessorKey: "city",
+    header: "City",
+  },
+  {
+    accessorKey: "state",
+    header: "State",
+  },
+  {
+    accessorKey: "region",
+    header: "Region",
   },
 ]
 
 export default function CustomersPage() {
+  const { organization } = useOrganization()
+
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    if (!organization?.id) return
+
+    const fetchCustomers = async () => {
+      try {
+        setLoading(true)
+        setError("")
+
+        const response = await fetch(
+          `http://localhost:3001/customers?orgId=${organization.id}`
+        )
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch customers")
+        }
+
+        const data = await response.json()
+
+        setCustomers(data)
+      } catch (err) {
+        console.error(err)
+        setError("Failed to load customers")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCustomers()
+  }, [organization?.id])
+
   return (
     <div className="flex flex-col gap-6 py-6">
-
       <div className="flex items-center justify-between px-4 lg:px-6">
         <div>
           <h1 className="text-2xl font-semibold">
@@ -88,7 +100,6 @@ export default function CustomersPage() {
       </div>
 
       <div className="px-4 lg:px-6">
-
         <div className="mb-3">
           <h2 className="text-lg font-medium">
             Customers ({customers.length})
@@ -99,13 +110,25 @@ export default function CustomersPage() {
           </p>
         </div>
 
-        <DataTable
-          data={customers}
-          columns={customerColumns}
-        />
+        {loading && (
+          <p className="text-sm text-muted-foreground">
+            Loading customers...
+          </p>
+        )}
 
+        {error && (
+          <p className="text-sm text-red-500">
+            {error}
+          </p>
+        )}
+
+        {!loading && !error && (
+          <DataTable
+            data={customers}
+            columns={customerColumns}
+          />
+        )}
       </div>
-
     </div>
   )
 }
