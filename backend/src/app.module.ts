@@ -4,6 +4,9 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './database/database.module';
 import { CustomersModule } from './customers/customers.module';
+import { BrandsModule } from './brands/brands.module';
+import { MetaAdsModule } from './meta-ads/meta-ads.module';
+import { MetaInstagramModule } from './meta-instagram/meta-instagram.module';
 
 @Module({
   imports: [
@@ -12,6 +15,9 @@ import { CustomersModule } from './customers/customers.module';
     }),
     DatabaseModule,
     CustomersModule,
+    BrandsModule,
+    MetaAdsModule,
+    MetaInstagramModule,
   ],
   controllers: [AppController],
   providers: [AppService],

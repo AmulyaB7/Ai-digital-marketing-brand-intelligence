@@ -55,7 +55,7 @@ export class ClerkAuthGuard implements CanActivate {
       };
 
       return true;
-    } catch {
+        } catch {
       throw new UnauthorizedException(
         'Invalid or expired authentication token',
       );
