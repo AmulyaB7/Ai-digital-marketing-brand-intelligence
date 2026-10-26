@@ -43,19 +43,15 @@ export class ClerkAuthGuard implements CanActivate {
 
       const organization = payload.o as OrganizationClaim | undefined;
 
-    //   console.log('Verified Clerk claims:', {
-    //     userId: payload.sub,
-    //     orgId: organization?.id,
-    //     orgRole: organization?.rol,
-    //   });
-
       request.auth = {
         org_id: organization?.id,
         org_role: organization?.rol,
       };
 
       return true;
-        } catch {
+    } catch (error) {
+      console.error('Clerk token verification failed:', error);
+
       throw new UnauthorizedException(
         'Invalid or expired authentication token',
       );
