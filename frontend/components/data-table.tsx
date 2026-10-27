@@ -11,7 +11,7 @@ import {
   globalFilteringFeature,
   rowPaginationFeature,
   rowSelectionFeature,
-  rowSortingFeature,
+  rowSortingFeature, 
   tableFeatures,
   useTable,
   type ColumnDef,
@@ -71,7 +71,7 @@ const features = tableFeatures({
 type DataTableProps<TData extends RowData> = {
   data: TData[]
   columns?: ColumnDef<typeof features, TData>[]
-}
+} 
 
 /* -----------------------------------------
    Reusable DataTable
