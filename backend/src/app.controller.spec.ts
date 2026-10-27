@@ -1,22 +1,43 @@
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { DatabaseService } from './database/database.service';
 
 describe('AppController', () => {
   let appController: AppController;
+  let databaseService: DatabaseService;
 
   beforeEach(async () => {
+    const mockDatabaseService = {
+      query: jest.fn(),
+    };
+
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AppController],
-      providers: [AppService],
+      providers: [
+        {
+          provide: DatabaseService,
+          useValue: mockDatabaseService,
+        },
+      ],
     }).compile();
 
     appController = app.get<AppController>(AppController);
+    databaseService = app.get<DatabaseService>(DatabaseService);
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+  describe('testDatabase', () => {
+    it('should return a successful database response', async () => {
+      const mockTime = new Date('2026-10-14T10:00:00Z');
+
+      jest.spyOn(databaseService, 'query').mockResolvedValue({
+        rows: [{ now: mockTime }],
+      } as any);
+
+      await expect(appController.testDatabase()).resolves.toEqual({
+        message: 'Database connection successful',
+        time: mockTime,
+      });
     });
   });
 });
