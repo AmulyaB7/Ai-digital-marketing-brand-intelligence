@@ -4,6 +4,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './database/database.module';
 import { CustomersModule } from './customers/customers.module';
+import { ContentsModule } from './contents/contents.module';
+
 // <<<<<<< feature/chat-brand-integration
 // import { Mem0Module } from './mem0/mem0.module';
 // import { ChatModule } from './chat/chat.module';
@@ -16,7 +18,7 @@ import { CustomersModule } from './customers/customers.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal: true,
+      isGlobal: true, 
     }),
     DatabaseModule,
     CustomersModule,
