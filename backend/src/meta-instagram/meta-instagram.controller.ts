@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Param,
   Post,
   Query,
   Req,
@@ -44,6 +45,29 @@ export class MetaInstagramController {
     }
 
     return this.service.startAuthorization(clerkOrgId, brandId);
+  }
+
+  @Get('verify/:brandId')
+  @UseGuards(ClerkAuthGuard)
+  async verify(
+    @Req() request: AuthenticatedRequest,
+    @Param('brandId') brandIdParam: string,
+  ) {
+    const clerkOrgId = request.auth?.org_id;
+
+    if (!clerkOrgId) {
+      throw new BadRequestException(
+        'An active Clerk organization is required',
+      );
+    }
+
+    const brandId = Number(brandIdParam);
+
+    if (!Number.isSafeInteger(brandId) || brandId <= 0) {
+      throw new BadRequestException('A valid brandId is required');
+    }
+
+    return this.service.verifyConnection(clerkOrgId, brandId);
   }
 
   @Get('callback')

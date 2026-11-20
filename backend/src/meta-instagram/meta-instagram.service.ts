@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   createCipheriv,
+  createDecipheriv,
   createHash,
   randomBytes,
 } from 'node:crypto';
@@ -31,6 +32,15 @@ type MetaPage = {
   access_token: string;
   instagram_business_account?: {
     id: string;
+  };
+};
+
+type InstagramProfile = {
+  id?: string;
+  username?: string;
+  name?: string;
+  error?: {
+    message?: string;
   };
 };
 
@@ -97,6 +107,39 @@ export class MetaInstagramService {
     ].join('.');
   }
 
+  private decryptToken(encryptedToken: string): string {
+    const parts = encryptedToken.split('.');
+
+    if (parts.length !== 4 || parts[0] !== 'v1') {
+      throw new InternalServerErrorException(
+        'Stored token has an unsupported encryption format',
+      );
+    }
+
+    const [, ivEncoded, tagEncoded, dataEncoded] = parts;
+
+    try {
+      const decipher = createDecipheriv(
+        'aes-256-gcm',
+        this.encryptionKey(),
+        Buffer.from(ivEncoded, 'base64'),
+      );
+
+      decipher.setAuthTag(Buffer.from(tagEncoded, 'base64'));
+
+      const decrypted = Buffer.concat([
+        decipher.update(Buffer.from(dataEncoded, 'base64')),
+        decipher.final(),
+      ]);
+
+      return decrypted.toString('utf8');
+    } catch {
+      throw new InternalServerErrorException(
+        'Could not decrypt the stored Instagram token',
+      );
+    }
+  }
+
   private async graphGet<T>(url: URL): Promise<T> {
     let response: Response;
 
@@ -118,7 +161,7 @@ export class MetaInstagramService {
 
     if (!response.ok) {
       throw new BadRequestException(
-        result.error?.message || 'Meta rejected the OAuth request',
+        result.error?.message || 'Meta rejected the request',
       );
     }
 
@@ -129,7 +172,6 @@ export class MetaInstagramService {
     clerkOrgId: string,
     brandId: number,
   ) {
-    // Verify that this brand belongs to the current Clerk organization.
     const brand = await this.database.query(
       `SELECT b.id
        FROM brands b
@@ -150,13 +192,11 @@ export class MetaInstagramService {
     const configId = this.required('META_LOGIN_CONFIG_ID');
     const redirectUri = this.required('META_OAUTH_REDIRECT_URI');
 
-    // Generate a strong, unpredictable OAuth state.
     const state = randomBytes(32).toString('hex');
     const stateHash = createHash('sha256')
       .update(state)
       .digest('hex');
 
-    // Persist only the hash, and expire it after 10 minutes.
     await this.database.query(
       `INSERT INTO brand_channels (
          brand_id,
@@ -208,7 +248,6 @@ export class MetaInstagramService {
       .update(state)
       .digest('hex');
 
-    // Consume the state atomically so it cannot be replayed.
     const pending = await this.database.query(
       `UPDATE brand_channels
        SET oauth_state_hash = NULL,
@@ -233,7 +272,6 @@ export class MetaInstagramService {
     const appSecret = this.required('META_APP_SECRET');
     const redirectUri = this.required('META_OAUTH_REDIRECT_URI');
 
-    // Exchange the authorization code for a short-lived token.
     const tokenUrl = new URL(
       `https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token`,
     );
@@ -252,7 +290,6 @@ export class MetaInstagramService {
       );
     }
 
-    // Exchange for a long-lived user token.
     const longTokenUrl = new URL(
       `https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token`,
     );
@@ -274,7 +311,6 @@ export class MetaInstagramService {
     const userToken =
       longToken.access_token || shortToken.access_token;
 
-    // Find Pages that have a linked professional Instagram account.
     const pagesUrl = new URL(
       `https://graph.facebook.com/${GRAPH_VERSION}/me/accounts`,
     );
@@ -303,7 +339,6 @@ export class MetaInstagramService {
       );
     }
 
-    // Never guess which account to connect when multiple accounts exist.
     if (eligiblePages.length > 1) {
       return this.redirectResult(
         'error',
@@ -324,7 +359,6 @@ export class MetaInstagramService {
         ? new Date(Date.now() + tokenExpiresIn * 1000)
         : null;
 
-    // Encrypt tokens before they enter the database.
     await this.database.query(
       `UPDATE brand_channels
        SET status = 'connected',
@@ -355,8 +389,75 @@ export class MetaInstagramService {
     );
   }
 
+  async verifyConnection(
+    clerkOrgId: string,
+    brandId: number,
+  ) {
+    const result = await this.database.query(
+      `SELECT
+         bc.status,
+         bc.external_account_id,
+         bc.external_page_id,
+         bc.external_account_name,
+         bc.access_token_encrypted
+       FROM brand_channels bc
+       INNER JOIN brands b
+         ON b.id = bc.brand_id
+       INNER JOIN organizations o
+         ON o.id = b.organization_id
+       WHERE bc.brand_id = $1
+         AND bc.platform = 'instagram'
+         AND o.clerk_org_id = $2`,
+      [brandId, clerkOrgId],
+    );
+
+    if (result.rows.length === 0) {
+      throw new NotFoundException(
+        'Instagram connection not found for this brand',
+      );
+    }
+
+    const connection = result.rows[0];
+
+    if (
+      connection.status !== 'connected' ||
+      !connection.external_account_id ||
+      !connection.access_token_encrypted
+    ) {
+      throw new BadRequestException(
+        'Instagram is not connected for this brand',
+      );
+    }
+
+    const pageToken = this.decryptToken(
+      connection.access_token_encrypted,
+    );
+
+    const profileUrl = new URL(
+      `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(
+        String(connection.external_account_id),
+      )}`,
+    );
+
+    profileUrl.searchParams.set('fields', 'id,username,name');
+    profileUrl.searchParams.set('access_token', pageToken);
+
+    const profile = await this.graphGet<InstagramProfile>(
+      profileUrl,
+    );
+
+    return {
+      verified: true,
+      brandId,
+      instagram: {
+        id: profile.id ?? null,
+        username: profile.username ?? null,
+        name: profile.name ?? null,
+      },
+    };
+  }
+
   finishWithError(message: string) {
-    // Only expose safe reason codes in the redirect URL.
     const safeReason = /access_denied|cancel/i.test(message)
       ? 'authorization_cancelled'
       : 'authorization_failed';
